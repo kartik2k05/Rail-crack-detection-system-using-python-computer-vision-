@@ -1,0 +1,90 @@
+code sane by hitesh and Himanshu 
+
+#include <SoftwareSerial.h>
+#include <TinyGPS++.h>
+
+SoftwareSerial sim808(7, 8); // SIM808 RX, TX
+SoftwareSerial gpsSerial(4, 3); // GPS RX, TX
+TinyGPSPlus gps;
+
+// Motor Pins
+const int motorPin1 = 9;
+const int motorPin2 = 10;
+const int motorPin3 = 11;
+const int motorPin4 = 12;
+
+// IR Sensor Pin
+const int irSensorPin = A0;
+
+// Function to stop motors
+void stopMotors() {
+  digitalWrite(motorPin1, LOW);
+  digitalWrite(motorPin2, LOW);
+  digitalWrite(motorPin3, LOW);
+  digitalWrite(motorPin4, LOW);
+}
+
+void setup() {
+  Serial.begin(9600);
+  sim808.begin(9600);
+  gpsSerial.begin(9600);
+
+  // Motor pin setup
+  pinMode(motorPin1, OUTPUT);
+  pinMode(motorPin2, OUTPUT);
+  pinMode(motorPin3, OUTPUT);
+  pinMode(motorPin4, OUTPUT);
+
+  // IR Sensor setup
+  pinMode(irSensorPin, INPUT);
+
+  // Initialize motors (running state)
+  digitalWrite(motorPin1, HIGH);
+  digitalWrite(motorPin2, HIGH);
+  digitalWrite(motorPin3, HIGH);
+  digitalWrite(motorPin4, HIGH);
+
+  delay(1000);
+  Serial.println("System initialized");
+}
+
+void loop() {
+  if (gpsSerial.available()) {
+    gps.encode(gpsSerial.read());
+  }
+
+  // IR sensor crack detection
+  int irValue = analogRead(irSensorPin);
+  if (irValue < 500) { // Adjust threshold based on testing
+    Serial.println("Crack detected! Stopping motors.");
+    stopMotors();
+
+    if (gps.location.isValid()) {
+      float latitude = gps.location.lat();
+      float longitude = gps.location.lng();
+      sendSMS(latitude, longitude);
+    } else {
+      Serial.println("Waiting for GPS signal...");
+    }
+
+    delay(10000); // Delay for 10 seconds before resuming
+  }
+}
+
+// Function to send SMS with GPS coordinates
+void sendSMS(float lat, float lon) {
+  sim808.print("AT+CMGF=1\r"); // Set SMS mode to text
+  delay(1000);
+  sim808.print("AT+CMGS=\"+9956103520\"\r"); // Replace with your phone number
+  delay(1000);
+
+  sim808.print("Crack detected at location: ");
+  sim808.print("Latitude: ");
+  sim808.print(lat, 6);
+  sim808.print(", Longitude: ");
+  sim808.print(lon, 6);
+  sim808.write(26); // ASCII code of Ctrl+Z to send SMS
+
+  delay(1000);
+  Serial.println("SMS sent with location.");
+}
